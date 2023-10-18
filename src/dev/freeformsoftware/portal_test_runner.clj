@@ -15,10 +15,10 @@
 (def neutral "#2d3746")
 
 (defn with-link
-  [{:keys [line file name ns column]}]
+  [{:keys [line file name ns column no-name?]}]
   [:span {:style {:float "right"}}
    [:portal.viewer/source-location
-    {:label  (str name)
+    {:label  (if no-name? "" (str name))
      :file   file
      :line   line
      :column column}]])
@@ -100,7 +100,7 @@
       (colored-text (pos? test) (if (pos? test) (str test " tests") "No tests found!"))
       (colored-text (zero? error) (str error " error(s)"))
       (colored-text (zero? fail) (str fail " failure(s)"))
-      (colored-text (pos? pass) (str pass " test(s) passed"))
+      (colored-text (pos? pass) (str pass " assertions(s) passed"))
       [:span {:style {:color "#2576f1"}} (ns-short-name (:ns meta))]
       [:portal.viewer/relative-time (:run-at meta)]]]))
 
@@ -133,7 +133,7 @@
                                                       nil
                                                       [:<> (colored-text green? (:name (meta var))) (with-link context-source-info)])
                                     :begin-specification [:<> (colored-text green? string) (with-link (merge context-source-info form-meta))]
-                                    :begin-behavior (when (not= string "unmarked") (colored-text green? string))
+                                    :begin-behavior [:<> (colored-text green? string) (some->> form-meta (merge context-source-info {:no-name? true}) (with-link ))]
                                     (:fail :error) [:portal.viewer/test-report element]
                                     :pass (when render-pass-tests? [:portal.viewer/test-report element])
                                     nil)
@@ -162,9 +162,14 @@
                                   options))))
 
     (with-redefs [clojure.test/report #(swap! report conj %)]
+      (swap! fulcro-spec.hooks/hooks assoc :on-enter 
+        (fn [{:fulcro-spec.core/keys [location]}] 
+          (swap! report (fn [rpts] 
+                          (conj (vec (butlast rpts)) (assoc (last rpts) :form-meta location))))))
       (clojure.test/run-tests ns))))
 
 (comment
   (make-summary @rpt)
   (reset! portal-instance nil)
+  (reset! fulcro-spec.hooks/hooks {})
   (run-test 'com.tybaenergy.ui.expandable-columns-spec))

@@ -1,2 +1,3 @@
-{:deps {org.clojure/clojure                        {:mvn/version "1.10.3"}
-        djblue/portal {:mvn/version "0.48.0"}}}
+{:paths ["src"]
+ :deps  {org.clojure/clojure {:mvn/version "1.10.3"}
+         djblue/portal       {:mvn/version "0.48.0"}}}

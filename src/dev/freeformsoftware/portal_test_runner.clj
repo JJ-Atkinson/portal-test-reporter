@@ -59,6 +59,10 @@
   [test-results]
   (= (:type (last test-results)) :summary))
 
+(defn any-failed?
+  [test-results]
+  (some (comp (partial contains? #{:fail :error}) :type) test-results))
+
 (defn make-summary
   [test-results]
   (let [existing-summary (first (filter #(= (:type %) :summary) test-results))
@@ -79,7 +83,7 @@
     (str "...")))
 
 (defn format-summary
-  [test-results]
+  [test-results hide-pass-if-any-fail?]
   (let [meta (first test-results)
         {:keys [test pass fail error] :as summary} (make-summary test-results)]
     [:div
@@ -101,16 +105,19 @@
       (colored-text (zero? error) (str error " error(s)"))
       (colored-text (zero? fail) (str fail " failure(s)"))
       (colored-text (pos? pass) (str pass " assertions(s) passed"))
+      (when hide-pass-if-any-fail? (colored-text false "Some tests failed, hiding passed tests"))
       [:span {:style {:color "#2576f1"}} (ns-short-name (:ns meta))]
       [:portal.viewer/relative-time (:run-at meta)]]]))
 
 (defn format-test-results
   [test-results]
-  (let [{::keys [render-pass-tests?]
-         :or    {render-pass-tests? true}} (first test-results)]
+  (let [{::keys [render-pass-tests?
+                 hide-pass-if-any-fail?]
+         :or    {render-pass-tests? true}} (first test-results)
+        hide-pass-if-any-fail? (and hide-pass-if-any-fail? (any-failed? test-results))]
     (loop [[element & es] (drop 1 test-results)
            depth               0
-           formatted-hiccup    [:<> (format-summary test-results)]
+           formatted-hiccup    [:<> (format-summary test-results hide-pass-if-any-fail?)]
            context-source-info nil]
       (if (nil? element)
         (with-meta formatted-hiccup {:portal.viewer/default :portal.viewer/hiccup})
@@ -128,15 +135,17 @@
               any-failures?       (scan-forward-failures es)
               green?              (not any-failures?)
 
-              new-element         (case type
-                                    :begin-test-var (if next-is-begin-spec?
-                                                      nil
-                                                      [:<> (colored-text green? (:name (meta var))) (with-link context-source-info)])
-                                    :begin-specification [:<> (colored-text green? string) (with-link (merge context-source-info form-meta))]
-                                    :begin-behavior [:<> (colored-text green? string) (some->> form-meta (merge context-source-info {:no-name? true}) (with-link ))]
-                                    (:fail :error) [:portal.viewer/test-report element]
-                                    :pass (when render-pass-tests? [:portal.viewer/test-report element])
-                                    nil)
+              new-element         (when
+                                   (or (not hide-pass-if-any-fail?) any-failures?)
+                                    (case type
+                                     :begin-test-var (if next-is-begin-spec?
+                                                       nil
+                                                       [:<> (colored-text green? (:name (meta var))) (with-link context-source-info)])
+                                     :begin-specification [:<> (colored-text green? string) (with-link (merge context-source-info form-meta))]
+                                     :begin-behavior [:<> (colored-text green? string) (some->> form-meta (merge context-source-info {:no-name? true}) (with-link))]
+                                     (:fail :error) [:portal.viewer/test-report element]
+                                     :pass (when render-pass-tests? [:portal.viewer/test-report element])
+                                     nil))
               new-element         (some->> new-element (depth-container (dec depth)))]
 
           (recur es depth
@@ -162,9 +171,9 @@
                                   options))))
 
     (with-redefs [clojure.test/report #(swap! report conj %)]
-      (swap! fulcro-spec.hooks/hooks assoc :on-enter 
-        (fn [{:fulcro-spec.core/keys [location]}] 
-          (swap! report (fn [rpts] 
+      (swap! fulcro-spec.hooks/hooks assoc :on-enter
+        (fn [{:fulcro-spec.core/keys [location]}]
+          (swap! report (fn [rpts]
                           (conj (vec (butlast rpts)) (assoc (last rpts) :form-meta location))))))
       (clojure.test/run-tests ns))))
 

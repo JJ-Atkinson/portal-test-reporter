@@ -2,3 +2,4 @@
 /.idea/libraries/*
 /.idea/*
 /portal-test-reporter.iml
+.clj-kondo/.cache/*

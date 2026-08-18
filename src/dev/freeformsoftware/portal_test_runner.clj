@@ -4,7 +4,7 @@
    [clojure.test :as t]
    [fulcro-spec.hooks :as hooks]
    [portal.api :as portal])
-  (:import (java.sql Timestamp)
+  (:import (java.time Instant)
            (java.util Date)))
 
 (defonce portal-viewed-atom (atom []))
@@ -259,7 +259,7 @@
                                         :ns           test-ns
                                         :focus-form   focus-form
                                         :mode         (if focus-form :focused :namespace)
-                                        :run-at       (str (Timestamp. (.getTime (Date.))))})])
+                                        :run-at       (str (Instant/now))})])
          original-report t/report]
      (reset! last-test-ns test-ns)
 
